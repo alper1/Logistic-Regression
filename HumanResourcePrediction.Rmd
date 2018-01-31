@@ -1,0 +1,109 @@
+---
+title: "Project2_Employees"
+output: word_document
+---
+
+```{r library}
+
+#library("lubridate") #for date format correction
+library("caTools") #split the data into test and train
+library("car")
+library("corrplot")
+library("MASS")
+library(nortest) 
+#library("mice") #missing data - outliers correction
+#library("caret")
+#library("lattice")
+
+
+```
+Firstly download the data and split into 70% tranning and 30% test 
+```{r setup, include=FALSE}
+HR = read.csv("HR_comma_sep.csv", sep=",",dec=".")
+head(HR)
+summary(HR)
+
+
+set.seed(1)
+
+HR["spl"] <- NA
+HR$spl <- sample.split(HR$spl,SplitRatio=0.7)
+
+HR.train=subset(HR[,-11], HR$spl==TRUE) # where spl== TRUE means to add only those rows that have value true for spl in the training dataframe
+HR.test <- subset(HR[,-11], HR$spl==FALSE)
+
+
+```
+
+Correlation Analyses
+```{r}
+#scatterplotMatrix(data_house)
+cor_HR <- cor(HR[,c("satisfaction_level","last_evaluation","number_project","average_montly_hours","time_spend_company","Work_accident","promotion_last_5years")])#excluding qualitative and binary variable to correlation plot
+corrplot(cor_HR, method="pie")
+```
+Construction of a model with all variable, as there is no high correlation between them
+```{r cars}
+mod1 <- glm(left ~ ., family = binomial(link = "logit"), data = HR.train)
+?glm
+summary(mod1)
+```
+The variable sales do not contributes to the model, except for sales RandD
+Let´s use StepAIC to help the selection of the best model and then compare it with the previous one
+```{r}
+library("bestglm")
+
+modBIC <- stepAIC(mod1, trace = 0, k = log(nrow(HR.train)))
+
+r2glm <- function(model) {
+
+  summaryLog <- summary(model)
+  1 - summaryLog$deviance / summaryLog$null.deviance
+
+}
+
+summary(modBIC)
+summary(mod1)
+
+r2glm(modBIC) 
+r2glm(mod1)
+
+```
+Assumptions:
+
+```{r}
+par(mfrow = c(2, 2))
+plot(modBIC, c(1,2)) #1-Linearity; 2-Normality;
+plot(modBIC$residuals, type = "o") #4-Independence of the errors
+
+```
+Formal test to verify normality
+```{r}
+lillie.test(modBIC$residuals)
+```
+
+```{r}
+par(mfrow = c(3, 3))
+termplot(modBIC, partial.resid = TRUE)
+
+```
+Multicolinearity
+```{r}
+vif(modBIC)
+```
+Model Accuracy
+```{r}
+library(caret)
+# make predictions
+predictions<- predict(modBIC,HR.test, type = "response" )
+
+gmlmodelbinded <- cbind(HR.test,predictions)
+
+gmlmodelbinded$predictions[gmlmodelbinded$predictions < 0.5] <- 0
+gmlmodelbinded$predictions[gmlmodelbinded$predictions >= 0.5] <- 1 
+
+summary(gmlmodelbinded)
+# summarize results
+confMat<- confusionMatrix(gmlmodelbinded$predictions,gmlmodelbinded$left)
+confMat
+
+```
