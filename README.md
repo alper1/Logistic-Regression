@@ -1,2 +1,2 @@
-# Logistic-Regression with R
-Human Resources dataset is used for this predictive modeling project
+# Logistic-Regression
+Human Resources dataset is used for this predictive modeling project with R
